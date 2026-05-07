@@ -1,0 +1,827 @@
+openapi: 3.0.3
+
+# ════════════════════════════════════════════════════════
+# INFO
+# ════════════════════════════════════════════════════════
+info:
+  title: Bookstore API
+  version: 1.0.0
+  description: |
+    # 📚 Bookstore API
+
+    API quản lý nhà sách online — Demo áp dụng OpenAPI Specification.
+
+    ## Tính năng
+    - 👤 **Users** — Đăng ký, đăng nhập, quản lý tài khoản
+    - 📖 **Books** — Xem và tìm kiếm danh mục sách
+    - 🛒 **Orders** — Đặt hàng và theo dõi trạng thái
+
+    ## Xác thực
+    Dùng **Bearer Token** (JWT) cho các endpoint được bảo vệ:
+    ```
+    Authorization: Bearer <your_token>
+    ```
+    Lấy token bằng cách gọi `POST /auth/login`.
+
+    ## Rate Limiting
+    > ⚠️ Tối đa **100 requests/phút** mỗi IP.
+    > Vượt quá sẽ nhận HTTP `429 Too Many Requests`.
+
+  contact:
+    name: Duc Hoang
+    email: baohoangbh@gmail.com
+    url: https://www.facebook.com/uchoang.237342/?locale=vi_VN
+
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+# ════════════════════════════════════════════════════════
+# SERVERS
+# ════════════════════════════════════════════════════════
+servers:
+  - url: https://api.bookstore.com/v1
+    description: 🚀 Production
+  - url: https://staging.bookstore.com/v1
+    description: 🧪 Staging
+  - url: http://localhost:3000/v1
+    description: 💻 Local Development
+
+# ════════════════════════════════════════════════════════
+# TAGS
+# ════════════════════════════════════════════════════════
+tags:
+  - name: Auth
+    description: Xác thực — Đăng ký, đăng nhập, refresh token
+  - name: Users
+    description: Quản lý tài khoản người dùng
+  - name: Books
+    description: Xem và tìm kiếm danh mục sách
+  - name: Orders
+    description: Đặt hàng và theo dõi trạng thái đơn hàng
+
+# ════════════════════════════════════════════════════════
+# GLOBAL SECURITY — Áp dụng cho toàn bộ API
+# ════════════════════════════════════════════════════════
+security:
+  - BearerAuth: []
+
+# ════════════════════════════════════════════════════════
+# PATHS
+# ════════════════════════════════════════════════════════
+paths:
+
+  # ── AUTH ──────────────────────────────────────────────
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: registerUser
+      summary: Đăng ký tài khoản mới
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              example1:
+                summary: Ví dụ đăng ký
+                value:
+                  name: Nguyen Van A
+                  email: a@gmail.com
+                  password: Secret@123
+      responses:
+        '201':
+          description: Đăng ký thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '409':
+          description: Email đã tồn tại
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: loginUser
+      summary: Đăng nhập lấy token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: a@gmail.com
+              password: Secret@123
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+              example:
+                accessToken: eyJhbGciOiJIUzI1NiJ9...
+                refreshToken: eyJhbGciOiJIUzI1NiJ9...
+                expiresIn: 86400
+        '401':
+          description: Sai email hoặc mật khẩu
+
+  # ── USERS ─────────────────────────────────────────────
+
+  /users/me:
+    get:
+      tags: [Users]
+      operationId: getMyProfile
+      summary: Xem profile của tôi
+      description: Trả về thông tin tài khoản của user đang đăng nhập.
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+    patch:
+      tags: [Users]
+      operationId: updateMyProfile
+      summary: Cập nhật profile của tôi
+      description: |
+        Cập nhật **một phần** thông tin profile.
+        Chỉ gửi những field cần thay đổi.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+            examples:
+              updateName:
+                summary: Chỉ đổi tên
+                value:
+                  name: Nguyen Van B
+              updateAll:
+                summary: Đổi tên và số điện thoại
+                value:
+                  name: Nguyen Van B
+                  phone: "0901234567"
+      responses:
+        '200':
+          description: Cập nhật thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+  /users/me/avatar:
+    post:
+      tags: [Users]
+      operationId: uploadAvatar
+      summary: Upload ảnh đại diện
+      description: Upload file ảnh JPEG hoặc PNG, tối đa **5MB**.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File ảnh JPEG hoặc PNG, tối đa 5MB
+      responses:
+        '200':
+          description: Upload thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  avatarUrl:
+                    type: string
+                    format: uri
+                    example: https://cdn.bookstore.com/avatars/1.jpg
+        '400':
+          description: File không hợp lệ hoặc vượt quá 5MB
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+  # ── BOOKS ─────────────────────────────────────────────
+
+  /books:
+    get:
+      tags: [Books]
+      operationId: getBooks
+      summary: Lấy danh sách sách
+      description: |
+        Trả về danh sách sách có **phân trang** và **filter**.
+
+        | Parameter | Mô tả |
+        |-----------|-------|
+        | `search` | Tìm theo tên sách hoặc tác giả |
+        | `category` | Lọc theo thể loại |
+        | `minPrice` | Giá tối thiểu (VNĐ) |
+        | `maxPrice` | Giá tối đa (VNĐ) |
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: search
+          in: query
+          required: false
+          description: Tìm kiếm theo tên sách hoặc tác giả
+          schema:
+            type: string
+            example: Clean Code
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [programming, business, science, history, fiction, self-help]
+            example: programming
+        - name: minPrice
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 0
+            example: 50000
+        - name: maxPrice
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: 0
+            example: 500000
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Book'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+              example:
+                data:
+                  - id: 101
+                    title: Clean Code
+                    author: Robert C. Martin
+                    price: 350000
+                    category: programming
+                    inStock: true
+                  - id: 102
+                    title: The Pragmatic Programmer
+                    author: David Thomas
+                    price: 420000
+                    category: programming
+                    inStock: false
+                meta:
+                  page: 1
+                  limit: 10
+                  total: 42
+                  totalPages: 5
+
+  /books/{bookId}:
+    get:
+      tags: [Books]
+      operationId: getBookById
+      summary: Lấy chi tiết một cuốn sách
+      security: []
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          description: ID của sách
+          schema:
+            type: integer
+            example: 101
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+  # ── ORDERS ────────────────────────────────────────────
+
+  /orders:
+    get:
+      tags: [Orders]
+      operationId: getMyOrders
+      summary: Lấy danh sách đơn hàng của tôi
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          required: false
+          description: Lọc theo trạng thái đơn hàng
+          schema:
+            type: string
+            enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+            example: pending
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+    post:
+      tags: [Orders]
+      operationId: createOrder
+      summary: Tạo đơn hàng mới
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              items:
+                - bookId: 101
+                  quantity: 2
+                - bookId: 102
+                  quantity: 1
+              shippingAddress:
+                street: 123 Nguyen Hue
+                district: Quan 1
+                city: Ho Chi Minh City
+      responses:
+        '201':
+          description: Đặt hàng thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          links:
+            GetOrderById:
+              operationId: getOrderById
+              parameters:
+                orderId: $response.body#/id
+              description: Dùng id vừa tạo để xem chi tiết đơn hàng
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      operationId: getOrderById
+      summary: Lấy chi tiết đơn hàng
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: ID của đơn hàng
+          schema:
+            type: integer
+            example: 1001
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          description: Không có quyền xem đơn hàng này
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+  /orders/{orderId}/cancel:
+    post:
+      tags: [Orders]
+      operationId: cancelOrder
+      summary: Hủy đơn hàng
+      description: |
+        Chỉ có thể hủy khi đơn hàng đang ở trạng thái `pending` hoặc `confirmed`.
+
+        > ⚠️ Đơn hàng đã `shipped` hoặc `delivered` **không thể hủy**.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 1001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Lý do hủy đơn (tùy chọn)
+                  example: Tôi đặt nhầm sản phẩm
+      responses:
+        '200':
+          description: Hủy đơn thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Đơn hàng không thể hủy ở trạng thái hiện tại
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+# ════════════════════════════════════════════════════════
+# COMPONENTS
+# ════════════════════════════════════════════════════════
+components:
+
+  # ── SECURITY SCHEMES ──────────────────────────────────
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token lấy từ `POST /auth/login`.
+
+        **Format:** `Authorization: Bearer <token>`
+
+        **Hết hạn sau:** 24 giờ.
+
+  # ── REUSABLE PARAMETERS ───────────────────────────────
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      required: false
+      description: Số trang, bắt đầu từ `1`
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+        example: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      description: Số items mỗi trang, tối đa `100`
+      schema:
+        type: integer
+        default: 10
+        minimum: 1
+        maximum: 100
+        example: 10
+
+  # ── REUSABLE RESPONSES ────────────────────────────────
+  responses:
+    BadRequestResponse:
+      description: Dữ liệu gửi lên không hợp lệ
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 400
+            title: Bad Request
+            detail: Field 'email' is required
+
+    UnauthorizedResponse:
+      description: Chưa xác thực hoặc token hết hạn
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 401
+            title: Unauthorized
+            detail: Token is missing or expired
+
+    NotFoundResponse:
+      description: Không tìm thấy resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 404
+            title: Not Found
+            detail: Resource does not exist
+
+  # ── SCHEMAS ───────────────────────────────────────────
+  schemas:
+
+    # ── AUTH SCHEMAS ────────────────────────────────────
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Nguyen Van A
+        email:
+          type: string
+          format: email
+          example: a@gmail.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          description: Tối thiểu 8 ký tự
+          example: Secret@123
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: a@gmail.com
+        password:
+          type: string
+          format: password
+          example: Secret@123
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT token dùng để xác thực
+          example: eyJhbGciOiJIUzI1NiJ9...
+        refreshToken:
+          type: string
+          description: Token để lấy accessToken mới
+          example: eyJhbGciOiJIUzI1NiJ9...
+        expiresIn:
+          type: integer
+          description: Số giây accessToken còn hiệu lực
+          example: 86400
+
+    # ── USER SCHEMAS ────────────────────────────────────
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+          example: 1
+        name:
+          type: string
+          example: Nguyen Van A
+        email:
+          type: string
+          format: email
+          example: a@gmail.com
+        phone:
+          type: string
+          nullable: true
+          example: "0901234567"
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://cdn.bookstore.com/avatars/1.jpg
+        role:
+          type: string
+          enum: [admin, user]
+          default: user
+          readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2024-01-15T10:30:00Z"
+
+    UpdateProfileRequest:
+      type: object
+      description: Tất cả fields đều tùy chọn — chỉ gửi fields cần thay đổi
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+          example: Nguyen Van B
+        phone:
+          type: string
+          pattern: '^0\d{9}$'
+          description: Số điện thoại bắt đầu bằng 0
+          example: "0901234567"
+
+    # ── BOOK SCHEMAS ────────────────────────────────────
+    Book:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 101
+        title:
+          type: string
+          example: Clean Code
+        author:
+          type: string
+          example: Robert C. Martin
+        description:
+          type: string
+          nullable: true
+          example: Hướng dẫn viết code sạch và dễ bảo trì
+        price:
+          type: number
+          format: float
+          minimum: 0
+          example: 350000
+        category:
+          type: string
+          enum: [programming, business, science, history, fiction, self-help]
+          example: programming
+        coverImageUrl:
+          type: string
+          format: uri
+          nullable: true
+          example: https://cdn.bookstore.com/books/clean-code.jpg
+        inStock:
+          type: boolean
+          example: true
+        publishedAt:
+          type: string
+          format: date
+          example: "2008-08-01"
+
+    # ── ORDER SCHEMAS ────────────────────────────────────
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1001
+        status:
+          type: string
+          enum: [pending, confirmed, processing, shipped, delivered, cancelled]
+          default: pending
+          description: |
+            Trạng thái đơn hàng:
+
+            | Giá trị | Ý nghĩa |
+            |---------|---------|
+            | `pending` | Chờ xác nhận |
+            | `confirmed` | Đã xác nhận |
+            | `processing` | Đang đóng gói |
+            | `shipped` | Đã giao vận chuyển |
+            | `delivered` | Khách đã nhận hàng |
+            | `cancelled` | Đơn bị hủy |
+          example: pending
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+        totalAmount:
+          type: number
+          description: Tổng tiền (VNĐ)
+          example: 1050000
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    OrderItem:
+      type: object
+      properties:
+        bookId:
+          type: integer
+          example: 101
+        title:
+          type: string
+          example: Clean Code
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 99
+          example: 2
+        unitPrice:
+          type: number
+          example: 350000
+        subtotal:
+          type: number
+          example: 700000
+
+    CreateOrderRequest:
+      type: object
+      required: [items, shippingAddress]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [bookId, quantity]
+            properties:
+              bookId:
+                type: integer
+                example: 101
+              quantity:
+                type: integer
+                minimum: 1
+                maximum: 99
+                example: 2
+        shippingAddress:
+          $ref: '#/components/schemas/Address'
+
+    # ── SHARED SCHEMAS ───────────────────────────────────
+    Address:
+      type: object
+      required: [street, city]
+      properties:
+        street:
+          type: string
+          example: 123 Nguyen Hue
+        district:
+          type: string
+          nullable: true
+          example: Quan 1
+        city:
+          type: string
+          example: Ho Chi Minh City
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          description: Tổng số records
+          example: 42
+        totalPages:
+          type: integer
+          example: 5
+
+    ErrorResponse:
+      type: object
+      description: Error response theo RFC 7807
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 404
+        title:
+          type: string
+          description: Tên lỗi ngắn gọn
+          example: Not Found
+        detail:
+          type: string
+          description: Mô tả chi tiết lỗi
+          example: Resource does not exist
+
+# ════════════════════════════════════════════════════════
+# EXTERNAL DOCS
+# ════════════════════════════════════════════════════════
+externalDocs:
+  description: Tài liệu đầy đủ tại GitHub Pages
+  url: https://your-username.github.io/bookstore-api-docs
